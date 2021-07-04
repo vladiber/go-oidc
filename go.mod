@@ -1,6 +1,6 @@
-module github.com/coreos/go-oidc/v3
+module github.com/vladiber/go-oidc/v3
 
-go 1.14
+go 1.16
 
 require (
 	github.com/google/go-cmp v0.4.0 // indirect

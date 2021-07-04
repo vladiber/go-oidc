@@ -80,6 +80,7 @@ type Provider struct {
 	tokenURL    string
 	userInfoURL string
 	algorithms  []string
+	logOutUrl   string
 
 	// Raw claims returned by the server.
 	rawClaims []byte
@@ -88,6 +89,7 @@ type Provider struct {
 }
 
 type providerJSON struct {
+	Logout      string   `json:"end_session_endpoint"`
 	Issuer      string   `json:"issuer"`
 	AuthURL     string   `json:"authorization_endpoint"`
 	TokenURL    string   `json:"token_endpoint"`
@@ -152,6 +154,7 @@ func NewProvider(ctx context.Context, issuer string) (*Provider, error) {
 		}
 	}
 	return &Provider{
+		logOutUrl:    p.Logout,
 		issuer:       p.Issuer,
 		authURL:      p.AuthURL,
 		tokenURL:     p.TokenURL,
@@ -213,6 +216,39 @@ func (u *UserInfo) Claims(v interface{}) error {
 		return errors.New("oidc: claims not set")
 	}
 	return json.Unmarshal(u.claims, v)
+}
+
+func (p *Provider) GetKeySet() KeySet {
+	return p.remoteKeySet
+}
+func (p *Provider) Logout(ctx context.Context, tokenSource oauth2.TokenSource) error {
+	if p.logOutUrl == "" {
+		return errors.New("oidc: logout  is not supported by this provider")
+	}
+	req, err := http.NewRequest("GET", p.logOutUrl, nil)
+	if err != nil {
+		return fmt.Errorf("oidc: create GET request: %v", err)
+	}
+
+	token, err := tokenSource.Token()
+	if err != nil {
+		return fmt.Errorf("oidc: get access token: %v", err)
+	}
+	token.SetAuthHeader(req)
+
+	resp, err := doRequest(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: %s", resp.Status, body)
+	}
+	return nil
 }
 
 // UserInfo uses the token source to query the provider's user info endpoint.
